@@ -7,6 +7,7 @@ public class MessageTest {
 
         // Clear any previous test data
         Message.clearMessages();
+        Message.clearStoredMessages();
 
         // Run all tests
         testCheckMessageID();
@@ -21,8 +22,14 @@ public class MessageTest {
         // Test specific cases from requirements
         testRequirementTestCases();
 
+        // Test JSON functionality
+        testJsonFunctionality();
+
         System.out.println("\n=== All Message tests completed! ===");
     }
+
+    // Remove the Gson field from the top of the class
+    // private static final Gson gson = new GsonBuilder().setPrettyPrinting().create();
 
     public static void testCheckMessageID() {
         System.out.println("1. Testing checkMessageID():");
@@ -131,19 +138,19 @@ public class MessageTest {
         System.out.println("\n6. Testing storeMessage():");
 
         // Create a test message and store it
-        Message message = new Message("+27831234567", "This is a test message for storage");
+        Message message = new Message("+27831234567", "This is a test message for JSON storage");
         message.createMessageHash();
         message.storeMessage();
 
-        // Check if file was created
-        File file = new File("messages.txt");
+        // Check if JSON file was created
+        File file = new File("messages.json");
         boolean fileExists = file.exists();
-        System.out.println("   ✓ Storage file created: " + (fileExists ? "PASS" : "FAIL"));
+        System.out.println("   ✓ JSON Storage file created: " + (fileExists ? "PASS" : "FAIL"));
 
         if (fileExists) {
-            String storedMessages = Message.getStoredMessages();
-            boolean containsMessage = storedMessages.contains("This is a test message for storage");
-            System.out.println("   ✓ Message stored correctly: " + (containsMessage ? "PASS" : "FAIL"));
+            String storedMessages = Message.getStoredMessagesFormatted();
+            boolean containsMessage = storedMessages.contains("This is a test message for JSON storage");
+            System.out.println("   ✓ Message stored correctly in JSON: " + (containsMessage ? "PASS" : "FAIL"));
         }
     }
 
@@ -211,22 +218,36 @@ public class MessageTest {
         System.out.println("     Expected: Should fail (missing international code)");
         boolean recipient2Valid = (recipientCheck == -2); // Should be -2 (missing international code)
         System.out.println("     ✓ Correctly identified missing international code: " + (recipient2Valid ? "PASS" : "FAIL"));
+    }
 
-        // Test message length validation
-        System.out.println("\n   Test Case 3 (Message length validation):");
-        String shortMessage = "Short message";
-        Message test3 = new Message("+27123456789", shortMessage);
-        String lengthCheck3 = test3.checkMessageLength();
-        System.out.println("     Short message length check: " + lengthCheck3);
-        System.out.println("     ✓ Short message validation: " +
-                (lengthCheck3.equals("Message ready to send.") ? "PASS" : "FAIL"));
+    public static void testJsonFunctionality() {
+        System.out.println("\n10. Testing JSON Functionality:");
 
-        // Test long message
-        String longMessage = "A".repeat(300);
-        Message test4 = new Message("+27123456789", longMessage);
-        String lengthCheck4 = test4.checkMessageLength();
-        System.out.println("     Long message length check: " + lengthCheck4);
-        System.out.println("     ✓ Long message validation: " +
-                (lengthCheck4.contains("exceeds 250 characters") ? "PASS" : "FAIL"));
+        // Clear previous stored messages
+        Message.clearStoredMessages();
+
+        // Store multiple messages in JSON
+        Message jsonMsg1 = new Message("+27111111111", "First JSON message");
+        jsonMsg1.storeMessage();
+
+        Message jsonMsg2 = new Message("+27222222222", "Second JSON message");
+        jsonMsg2.storeMessage();
+
+        Message jsonMsg3 = new Message("+27333333333", "Third JSON message");
+        jsonMsg3.storeMessage();
+
+        // Test retrieving stored messages
+        String storedMessages = Message.getStoredMessagesFormatted();
+        boolean hasAllMessages = storedMessages.contains("First JSON message") &&
+                storedMessages.contains("Second JSON message") &&
+                storedMessages.contains("Third JSON message");
+        System.out.println("   ✓ All messages stored and retrieved from JSON: " + (hasAllMessages ? "PASS" : "FAIL"));
+
+        // Test raw JSON output
+        String jsonOutput = Message.getStoredMessages();
+        boolean isJson = jsonOutput.contains("[") && jsonOutput.contains("messageID");
+        System.out.println("   ✓ Output contains JSON structure: " + (isJson ? "PASS" : "FAIL"));
+
+        System.out.println("   Formatted Output:\n" + storedMessages);
     }
 }

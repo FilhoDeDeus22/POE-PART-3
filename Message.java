@@ -4,16 +4,17 @@ import java.util.List;
 import java.util.Random;
 
 public class Message {
-    private final String messageID;
+    private String messageID;
     private final String recipient;
     private final String messageContent;
     private String messageHash;
     private boolean isSent;
     private boolean isStored;
+    private String timestamp;
     private static int totalMessagesSent = 0;
     private static int messageCounter = 0;
     private static final List<Message> allMessages = new ArrayList<>();
-    private static final String STORAGE_FILE = "messages.txt";
+    private static final String STORAGE_FILE = "messages.json";
 
     public Message(String recipient, String messageContent) {
         this.messageID = generateMessageID();
@@ -22,7 +23,33 @@ public class Message {
         this.messageHash = "";
         this.isSent = false;
         this.isStored = false;
+        this.timestamp = String.valueOf(System.currentTimeMillis());
         messageCounter++;
+    }
+
+    // Fixed: Added complete method implementation
+    public static String getStoredMessagesFormatted() {
+        try {
+            List<Message> storedMessages = loadStoredMessages();
+            if (storedMessages.isEmpty()) {
+                return "No stored messages found.";
+            }
+
+            StringBuilder content = new StringBuilder();
+            content.append("Stored Messages (Formatted):\n");
+            for (int i = 0; i < storedMessages.size(); i++) {
+                Message msg = storedMessages.get(i);
+                content.append(i + 1).append(". MessageID: ").append(msg.getMessageID())
+                        .append(", Recipient: ").append(msg.getRecipient())
+                        .append(", Message: ").append(msg.getMessageContent())
+                        .append(", Hash: ").append(msg.getMessageHash())
+                        .append(", Timestamp: ").append(msg.getTimestamp())
+                        .append("\n");
+            }
+            return content.toString();
+        } catch (Exception e) {
+            return "Error retrieving stored messages: " + e.getMessage();
+        }
     }
 
     // Method to generate random 10-digit message ID
@@ -109,24 +136,133 @@ public class Message {
         }
     }
 
-    // Store message in simple text format (no JSON)
+    // Store message in JSON format
     public void storeMessage() {
         try {
-            FileWriter writer = new FileWriter(STORAGE_FILE, true); // append mode
-            writer.write("MessageID: " + this.messageID + "\n");
-            writer.write("Recipient: " + this.recipient + "\n");
-            writer.write("Message: " + this.messageContent + "\n");
-            writer.write("Hash: " + this.messageHash + "\n");
-            writer.write("Timestamp: " + System.currentTimeMillis() + "\n");
-            writer.write("Status: stored\n");
-            writer.write("--------------------\n");
-            writer.close();
+            // Load existing messages
+            List<Message> storedMessages = loadStoredMessages();
 
-            System.out.println("Message stored in file: " + STORAGE_FILE);
+            // Add current message
+            storedMessages.add(this);
+
+            // Save all messages back to file
+            saveMessagesToFile(storedMessages);
+
+            System.out.println("Message stored in JSON file: " + STORAGE_FILE);
 
         } catch (Exception e) {
             System.out.println("Error storing message: " + e.getMessage());
         }
+    }
+
+    // Load stored messages from JSON file
+    private static List<Message> loadStoredMessages() {
+        List<Message> messages = new ArrayList<>();
+        try {
+            File file = new File(STORAGE_FILE);
+            if (!file.exists()) {
+                return messages;
+            }
+
+            BufferedReader reader = new BufferedReader(new FileReader(file));
+            StringBuilder jsonContent = new StringBuilder();
+            String line;
+            while ((line = reader.readLine()) != null) {
+                jsonContent.append(line);
+            }
+            reader.close();
+
+            // Simple JSON parsing - extract message objects
+            String json = jsonContent.toString().trim();
+            if (json.startsWith("[") && json.endsWith("]")) {
+                json = json.substring(1, json.length() - 1);
+                String[] messageObjects = json.split("},\\{");
+
+                for (String messageObj : messageObjects) {
+                    Message msg = parseMessageFromJson(messageObj);
+                    if (msg != null) {
+                        messages.add(msg);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.out.println("Error loading stored messages: " + e.getMessage());
+        }
+        return messages;
+    }
+
+    // Parse a message from JSON string
+    private static Message parseMessageFromJson(String json) {
+        try {
+            String recipient = extractJsonField(json, "recipient");
+            String messageContent = extractJsonField(json, "messageContent");
+
+            if (recipient != null && messageContent != null) {
+                Message message = new Message(recipient, messageContent);
+                message.messageHash = extractJsonField(json, "messageHash");
+                message.messageID = extractJsonField(json, "messageID");
+                message.timestamp = extractJsonField(json, "timestamp");
+                message.isStored = true;
+                return message;
+            }
+        } catch (Exception e) {
+            System.out.println("Error parsing message from JSON: " + e.getMessage());
+        }
+        return null;
+    }
+
+    // Extract field from JSON string
+    private static String extractJsonField(String json, String fieldName) {
+        try {
+            String search = "\"" + fieldName + "\":\"";
+            int start = json.indexOf(search);
+            if (start == -1) return null;
+            start += search.length();
+            int end = json.indexOf("\"", start);
+            if (end == -1) return null;
+            return json.substring(start, end);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // Save messages to JSON file
+    private static void saveMessagesToFile(List<Message> messages) throws IOException {
+        FileWriter writer = new FileWriter(STORAGE_FILE);
+        writer.write("[\n");
+
+        for (int i = 0; i < messages.size(); i++) {
+            Message msg = messages.get(i);
+            writer.write("  {\n");
+            writer.write("    \"messageID\": \"" + escapeJson(msg.messageID) + "\",\n");
+            writer.write("    \"recipient\": \"" + escapeJson(msg.recipient) + "\",\n");
+            writer.write("    \"messageContent\": \"" + escapeJson(msg.messageContent) + "\",\n");
+            writer.write("    \"messageHash\": \"" + escapeJson(msg.messageHash) + "\",\n");
+            writer.write("    \"isSent\": " + msg.isSent + ",\n");
+            writer.write("    \"isStored\": " + msg.isStored + ",\n");
+            writer.write("    \"timestamp\": \"" + msg.timestamp + "\"\n");
+            writer.write("  }");
+
+            if (i < messages.size() - 1) {
+                writer.write(",");
+            }
+            writer.write("\n");
+        }
+
+        writer.write("]");
+        writer.close();
+    }
+
+    // Helper method to escape JSON special characters
+    private static String escapeJson(String text) {
+        if (text == null) return "";
+        return text.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\b", "\\b")
+                .replace("\f", "\\f")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     // Check message length
@@ -149,8 +285,8 @@ public class Message {
     public String getRecipient() { return recipient; }
     public String getMessageContent() { return messageContent; }
     public String getMessageHash() { return messageHash; }
-    public boolean isSent() {
-        return isSent; }
+
+    public String getTimestamp() { return timestamp; }
 
     // Static methods
     public static String printMessages() {
@@ -183,25 +319,40 @@ public class Message {
         messageCounter = 0;
     }
 
-    // Method to get stored messages from file
+    // Method to get stored messages from JSON file
     public static String getStoredMessages() {
         try {
-            File file = new File(STORAGE_FILE);
-            if (!file.exists()) {
+            List<Message> storedMessages = loadStoredMessages();
+            if (storedMessages.isEmpty()) {
                 return "No stored messages found.";
             }
 
-            BufferedReader reader = new BufferedReader(new FileReader(file));
             StringBuilder content = new StringBuilder();
-            String line;
-            content.append("Stored Messages:\n");
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n");
+            content.append("Stored Messages (JSON):\n");
+            for (int i = 0; i < storedMessages.size(); i++) {
+                Message msg = storedMessages.get(i);
+                content.append(i + 1).append(". MessageID: ").append(msg.getMessageID())
+                        .append(", Recipient: ").append(msg.getRecipient())
+                        .append(", Message: ").append(msg.getMessageContent())
+                        .append(", Hash: ").append(msg.getMessageHash())
+                        .append(", Timestamp: ").append(msg.getTimestamp())
+                        .append("\n");
             }
-            reader.close();
             return content.toString();
         } catch (Exception e) {
             return "Error retrieving stored messages: " + e.getMessage();
+        }
+    }
+
+    // Method to clear stored messages from JSON file
+    public static void clearStoredMessages() {
+        try {
+            FileWriter writer = new FileWriter(STORAGE_FILE);
+            writer.write("[]");
+            writer.close();
+            System.out.println("All stored messages cleared from JSON file.");
+        } catch (Exception e) {
+            System.out.println("Error clearing stored messages: " + e.getMessage());
         }
     }
 }
